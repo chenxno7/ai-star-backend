@@ -12,14 +12,23 @@ export const getMe = async (req: AuthRequest, res: Response) => {
     const openid = req.user?.openid;
     if (!openid) return res.status(401).json({ code: 401, message: 'Unauthorized' });
 
-    const user = await userRepository.findOne({ 
+    let user = await userRepository.findOne({ 
       where: { openid },
       relations: ['classes', 'classes.class']
     });
 
     if (!user) {
-      // User not found, return 404 so frontend knows to register/handle
-      return res.status(404).json({ code: 404, message: 'User not found' });
+      // Auto-register logic (Scheme B)
+      // Create a basic user with just openid
+      user = userRepository.create({ 
+        openid,
+        // Optional: set default name/avatar if desired, e.g. "User_<short_id>"
+      });
+      await userRepository.save(user);
+      
+      // Since it's new, classes is empty
+      user.classes = [];
+      user.createdClasses = [];
     }
 
     return res.json({ code: 0, data: user });
