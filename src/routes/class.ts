@@ -12,5 +12,6 @@ router.post('/', classController.createClass);
 router.get('/:id', classController.getClass);
 router.post('/:id/student', classController.addStudent);
 router.post('/:id/log', classController.addLog);
+router.delete('/:id', classController.deleteClassOrLeave);
 
 export default router;
