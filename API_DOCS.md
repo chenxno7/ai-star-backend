@@ -130,6 +130,33 @@
     }
     ```
 
+### 2.7 删除学生 (新增)
+*   **路径**: `/:id/student/:studentId`
+*   **方法**: `DELETE`
+*   **描述**: 从班级中彻底移除指定学生，同时删除该学生的所有行为日志。仅老师可操作。
+*   **请求参数**: 无
+*   **响应**:
+    ```json
+    {
+      "code": 0,
+      "message": "Student deleted successfully"
+    }
+    ```
+
+### 2.8 撤销行为日志 (新增)
+*   **路径**: `/:id/log/:logId`
+*   **方法**: `DELETE`
+*   **描述**: 撤销某次打分。系统会自动回滚该日志对应的分数变化（如撤销“+1”，学生总分“-1”）。仅老师可操作。
+*   **请求参数**: 无
+*   **响应**:
+    ```json
+    {
+      "code": 0,
+      "message": "Log undone successfully",
+      "data": { ... } // 返回更新后的班级完整信息
+    }
+    ```
+
 ---
 
 ## 前端调用示例 (Taro)
@@ -154,7 +181,6 @@ async function callApi(path, method = 'GET', data = {}) {
 
 // 使用示例
 const myInfo = await callApi('/user/me');
-const newClass = await callApi('/class', 'POST', { name: '新班级', teacherName: '李老师' });
-// 退出班级
-await callApi('/class/class-uuid-123', 'DELETE');
+// 撤销日志
+await callApi('/class/class-uuid/log/log-uuid', 'DELETE');
 ```

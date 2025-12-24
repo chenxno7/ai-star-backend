@@ -232,10 +232,6 @@ export const deleteClassOrLeave = async (req: AuthRequest, res: Response) => {
           // To update user in transaction, we need to save via manager
           await transactionalEntityManager.update(User, user.id, { currentClassId: undefined });
         }
-        
-        // Also need to clear currentClassId for other users?
-        // Ideally yes, but that might be expensive if many users.
-        // For now, let's leave it. If they query an invalid classId, the frontend handles it or backend returns null.
       });
       
       return res.json({ code: 0, message: 'Class dissolved successfully' });
@@ -254,6 +250,102 @@ export const deleteClassOrLeave = async (req: AuthRequest, res: Response) => {
 
   } catch (error) {
     console.error('deleteClassOrLeave error:', error);
+    return res.status(500).json({ code: 500, message: 'Internal Server Error' });
+  }
+};
+
+// Delete Student
+export const deleteStudent = async (req: AuthRequest, res: Response) => {
+  try {
+    const openid = req.user?.openid;
+    if (!openid) return res.status(401).json({ code: 401, message: 'Unauthorized' });
+
+    const { id, studentId } = req.params; // classId, studentId
+
+    // Check permissions: only TEACHER can delete students
+    const user = await userRepository.findOne({ where: { openid } });
+    if (!user) return res.status(404).json({ code: 404, message: 'User not found' });
+
+    const relation = await userClassRelationRepository.findOne({
+      where: { userId: user.id, classId: id, role: Role.TEACHER }
+    });
+
+    if (!relation) {
+      return res.status(403).json({ code: 403, message: 'Permission denied: Only teacher can delete students' });
+    }
+
+    await AppDataSource.transaction(async (transactionalEntityManager) => {
+      // Delete logs for this student
+      await transactionalEntityManager.delete(BehaviorLog, { studentId: studentId, classId: id });
+      
+      // Delete student
+      await transactionalEntityManager.delete(Student, { id: studentId, classId: id });
+    });
+
+    return res.json({ code: 0, message: 'Student deleted successfully' });
+  } catch (error) {
+    console.error('deleteStudent error:', error);
+    return res.status(500).json({ code: 500, message: 'Internal Server Error' });
+  }
+};
+
+// Undo Log
+export const undoLog = async (req: AuthRequest, res: Response) => {
+  try {
+    const openid = req.user?.openid;
+    if (!openid) return res.status(401).json({ code: 401, message: 'Unauthorized' });
+
+    const { id, logId } = req.params; // classId, logId
+
+    // Check permissions: only TEACHER can undo logs (assumed)
+    const user = await userRepository.findOne({ where: { openid } });
+    if (!user) return res.status(404).json({ code: 404, message: 'User not found' });
+
+    const relation = await userClassRelationRepository.findOne({
+      where: { userId: user.id, classId: id, role: Role.TEACHER }
+    });
+
+    if (!relation) {
+      return res.status(403).json({ code: 403, message: 'Permission denied: Only teacher can undo logs' });
+    }
+
+    await AppDataSource.transaction(async (transactionalEntityManager) => {
+      // Find the log first to know the value to rollback
+      const log = await transactionalEntityManager.findOne(BehaviorLog, { where: { id: logId, classId: id } });
+      
+      if (!log) {
+        throw new Error('Log not found');
+      }
+
+      // Revert student score
+      const student = await transactionalEntityManager.findOne(Student, { where: { id: log.studentId } });
+      if (student) {
+        student.score -= log.value;
+        await transactionalEntityManager.save(student);
+      }
+
+      // Delete the log
+      await transactionalEntityManager.remove(log);
+    });
+
+    // Return updated class data
+    const updatedClassData = await classRepository.findOne({ 
+        where: { id },
+        relations: ['students', 'logs'],
+        order: {
+            logs: {
+                timestamp: 'DESC'
+            }
+        }
+    });
+
+    return res.json({ code: 0, message: 'Log undone successfully', data: updatedClassData });
+
+  } catch (error: any) {
+    if (error.message === 'Log not found') {
+        return res.status(404).json({ code: 404, message: 'Log not found' });
+    }
+    console.error('undoLog error:', error);
     return res.status(500).json({ code: 500, message: 'Internal Server Error' });
   }
 };

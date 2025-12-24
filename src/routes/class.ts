@@ -13,5 +13,7 @@ router.get('/:id', classController.getClass);
 router.post('/:id/student', classController.addStudent);
 router.post('/:id/log', classController.addLog);
 router.delete('/:id', classController.deleteClassOrLeave);
+router.delete('/:id/student/:studentId', classController.deleteStudent);
+router.delete('/:id/log/:logId', classController.undoLog);
 
 export default router;
